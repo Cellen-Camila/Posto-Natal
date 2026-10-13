@@ -167,16 +167,18 @@ function homeFor() {
   return '#/agenda';
 }
 
-function renderLogin() {
+async function renderLogin() {
+  let info = { demo: false, posto: '' };
+  try { info = await get('/api/info'); } catch { /* sem conexão */ }
   mount($('#root'), html`<div class="login"><div class="card">
-    <div class="row"><img src="/icon.svg" width="40" height="40" alt=""><div><h1>Gestão do Posto</h1><small>Pista, RH, financeiro, conveniência, combustíveis e documentos</small></div></div>
+    <div class="row"><img src="/icon.svg" width="40" height="40" alt=""><div><h1>Gestão do Posto</h1><small>${info.posto || 'Pista, RH, financeiro, conveniência, combustíveis e documentos'}</small></div></div>
     <form id="login-form">
       <label class="field">Usuário<input name="login" autocomplete="username" required autofocus></label>
       <label class="field">Senha<input name="senha" type="password" autocomplete="current-password" required></label>
       <button class="btn btn-primary btn-lg" type="submit">Entrar</button>
     </form>
-    <div class="demo-users">Demonstração (senha <code>posto123</code>): <code>gerente</code>, <code>dono</code>, <code>chefe</code>, <code>joao</code> (frentista),
-      <code>financeiro</code>, <code>rh</code>, <code>conveniencia</code>, <code>contador</code>.</div>
+    ${info.demo ? html`<div class="demo-users">Demonstração (senha <code>posto123</code>): <code>gerente</code>, <code>dono</code>, <code>chefe</code>, <code>joao</code> (frentista),
+      <code>financeiro</code>, <code>rh</code>, <code>conveniencia</code>, <code>contador</code>.</div>` : html`<div class="demo-users">Esqueceu a senha? Peça ao gerente para definir uma nova em Administração → Usuários.</div>`}
   </div></div>`);
   $('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -223,13 +225,43 @@ function renderShell() {
   refreshBell();
 }
 
+// Primeiro acesso (ou senha definida pelo gerente): a pessoa cria a própria senha antes de usar
+function trocaObrigatoria() {
+  const m = modal({
+    title: 'Crie a sua senha', size: 'sm',
+    body: html`<p>Por segurança, troque a senha provisória antes de começar. Use pelo menos 8 caracteres e não compartilhe com ninguém.</p>
+      <form id="pwd1" class="form-grid" style="grid-template-columns:1fr">
+        <label>Senha provisória<input type="password" name="atual" required autocomplete="current-password"></label>
+        <label>Nova senha<input type="password" name="nova" minlength="8" required autocomplete="new-password"></label>
+        <label>Repita a nova senha<input type="password" name="nova2" minlength="8" required autocomplete="new-password"></label>
+        <button class="btn btn-primary" type="submit">Salvar e continuar</button>
+      </form>`,
+  });
+  m.el.classList.add('obrigatorio');
+  $$('[data-close]', m.el).forEach((b) => b.remove());
+  m.el.addEventListener('mousedown', (e) => e.stopPropagation(), true);
+  $('#pwd1', m.el).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    if (fd.get('nova') !== fd.get('nova2')) { toast('As duas senhas novas não são iguais', 'err'); return; }
+    try {
+      await post('/api/me/senha', { atual: fd.get('atual'), nova: fd.get('nova') });
+      state.meta.user.trocar_senha = 0;
+      m.el.remove();
+      toast('Senha criada. Bem-vindo!', 'ok');
+      route();
+      refreshBell();
+    } catch (err) { handleErr(err); }
+  });
+}
+
 function userMenu() {
   const m = modal({
     title: state.meta.user.nome, size: 'sm',
     body: html`<p class="muted">${state.meta.roles[state.meta.user.perfil]}</p>
       <form id="pwd" class="form-grid" style="grid-template-columns:1fr">
         <label>Senha atual<input type="password" name="atual" required></label>
-        <label>Nova senha (mín. 6)<input type="password" name="nova" minlength="6" required></label>
+        <label>Nova senha (mín. 8)<input type="password" name="nova" minlength="8" required></label>
         <button class="btn" type="submit">Trocar senha</button>
       </form>
       <div class="row mt"><span class="muted">Tema:</span>
@@ -292,7 +324,7 @@ async function route() {
   const view = $('#view');
   if (!view) return;
   $('#sidebar')?.classList.remove('open');
-  document.querySelectorAll('.modal-bg').forEach((m) => m.remove());
+  document.querySelectorAll('.modal-bg:not(.obrigatorio)').forEach((m) => m.remove());
   highlightNav('#' + path);
   const r = ROUTES.find(([re]) => re.test(path));
   if (!r) { mount(view, html`<div class="empty">Página não encontrada.</div>`); return; }
@@ -328,6 +360,7 @@ async function boot(fromLogin = false) {
   renderShell();
   if (fromLogin || !location.hash || location.hash === '#/login') location.hash = homeFor();
   await route();
+  if (state.meta.user.trocar_senha) trocaObrigatoria();
   syncOutbox().then(updateOffline);
 }
 function safeGetTheme() { try { return localStorage.getItem('theme'); } catch { return null; } }

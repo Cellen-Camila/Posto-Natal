@@ -30,7 +30,7 @@ const MIME = {
   '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.xml': 'application/xml', '.txt': 'text/plain; charset=utf-8',
 };
 
-function createApp({ db, dataDir }) {
+function createApp({ db, dataDir, demo = false }) {
   const uploadsDir = path.join(dataDir, 'uploads');
   fs.mkdirSync(uploadsDir, { recursive: true });
   const routes = [];
@@ -44,13 +44,15 @@ function createApp({ db, dataDir }) {
 
   // ---------------------------------------------------------------- Autenticação
   route('POST', '/api/login', ({ body }) => auth.login(db, body.login, body.senha), { public: true });
+  route('GET', '/api/info', () => ({ demo: !!demo, posto: db.prepare('SELECT nome FROM postos ORDER BY id LIMIT 1').get()?.nome || '' }), { public: true });
   route('POST', '/api/logout', ({ token }) => { auth.logout(db, token); return { ok: true }; });
   route('GET', '/api/me', ({ ctx }) => ctx.user);
   route('POST', '/api/me/senha', ({ ctx, body }) => {
     const u = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(ctx.user.id);
     if (!auth.verifyPassword(body.atual, u.senha)) throw new HttpError(400, 'Senha atual incorreta');
-    if (String(body.nova || '').length < 6) throw new HttpError(400, 'A nova senha deve ter ao menos 6 caracteres');
-    db.prepare('UPDATE usuarios SET senha = ? WHERE id = ?').run(auth.hashPassword(body.nova), u.id);
+    if (String(body.nova || '').length < 8) throw new HttpError(400, 'A nova senha deve ter ao menos 8 caracteres');
+    if (body.nova === body.atual) throw new HttpError(400, 'A nova senha deve ser diferente da atual');
+    db.prepare('UPDATE usuarios SET senha = ?, trocar_senha = 0 WHERE id = ?').run(auth.hashPassword(body.nova), u.id);
     crud.audit(db, ctx.user, 'trocar_senha', 'usuarios', u.id);
     return { ok: true };
   });
@@ -92,6 +94,7 @@ function createApp({ db, dataDir }) {
       if (body.senha) {
         if (String(body.senha).length < 6) throw new HttpError(400, 'A senha deve ter ao menos 6 caracteres');
         data.senha = auth.hashPassword(body.senha);
+        data.trocar_senha = 1; // senha definida pelo gerente: a pessoa cria a sua no primeiro acesso
       } else {
         delete data.senha;
         if (!old) throw new HttpError(400, 'Informe a senha inicial');
@@ -320,6 +323,9 @@ function createApp({ db, dataDir }) {
       if (!r.public) {
         const user = auth.userFromToken(db, token);
         if (!user) throw new HttpError(401, 'Sessão expirada — entre novamente');
+        if (user.trocar_senha && !['/api/meta', '/api/me', '/api/me/senha', '/api/logout'].includes(url.pathname)) {
+          throw new HttpError(403, 'Crie a sua senha pessoal antes de continuar');
+        }
         let postoId = user.posto_id || null;
         const hdr = req.headers['x-posto'] || query.posto;
         if (!postoId && hdr && hdr !== 'all') postoId = Number(hdr) || null;

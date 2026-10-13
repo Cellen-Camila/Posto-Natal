@@ -848,6 +848,7 @@ def({
     { name: 'posto_id', label: 'Posto (vazio = todos)', type: 'ref', ref: 'postos', list: true },
     { name: 'telefone', label: 'WhatsApp para alertas', type: 'text' },
     { name: 'email', label: 'E-mail para alertas', type: 'text' },
+    { name: 'trocar_senha', label: 'Pedir nova senha no próximo acesso', type: 'bool', default: 1 },
     { name: 'ativo', label: 'Ativo', type: 'bool', default: 1, list: true },
   ],
 });

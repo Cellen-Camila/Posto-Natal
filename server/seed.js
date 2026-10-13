@@ -22,6 +22,53 @@ function rng(seed) {
   };
 }
 
+// Plano de contas e agenda de obrigações (PRD seção 11): usados na demonstração e na implantação real
+const PLANO_CONTAS = [
+  ['rec_comb', '3.1.01', 'Receita de combustíveis', 'receita'], ['rec_conv', '3.1.02', 'Receita da conveniência', 'receita'],
+  ['cmv_comb', '4.1.01', 'Compra de combustíveis', 'cmv'], ['cmv_conv', '4.1.02', 'Compra de mercadorias (conveniência)', 'cmv'],
+  ['folha', '5.1.01', 'Salários e encargos', 'despesa'], ['energia', '5.2.01', 'Energia elétrica', 'despesa'], ['agua', '5.2.02', 'Água e esgoto', 'despesa'],
+  ['aluguel', '5.2.03', 'Aluguel', 'despesa'], ['manut', '5.2.04', 'Manutenção de equipamentos', 'despesa'], ['impostos', '5.3.01', 'Impostos e taxas', 'despesa'],
+  ['servicos', '5.2.05', 'Serviços de terceiros', 'despesa'], ['sst', '5.2.06', 'Saúde e segurança do trabalho', 'despesa'], ['tarifas', '6.1.01', 'Tarifas bancárias', 'financeira'],
+];
+
+const OBRIGACOES = [
+  ['Abertura de turno (checklist da pista)', 'pista', 'diaria', null, null, null, '06:30', 'chefe_pista', 'abertura_turno'],
+  ['Leitura de encerrantes e medição dos tanques', 'pista', 'diaria', null, null, null, '07:00', 'chefe_pista', 'medicao_tanques'],
+  ['Fechamento de turno', 'pista', 'diaria', null, null, null, '23:00', 'chefe_pista', 'fechamento_turno'],
+  ['Fechamento de caixa por frentista', 'pista', 'diaria', null, null, null, '23:00', 'chefe_pista', 'fechamento_caixa'],
+  ['LMC do dia', 'combustiveis', 'diaria', null, null, null, '10:00', 'financeiro', 'lmc'],
+  ['Conciliação bancária', 'financeiro', 'diaria', null, null, null, '11:00', 'financeiro', 'conciliacao_bancaria'],
+  ['Conciliação de cartões', 'financeiro', 'diaria', null, null, null, '11:30', 'financeiro', 'conciliacao_cartoes'],
+  ['Baixa de pagamentos e recebimentos', 'financeiro', 'diaria', null, null, null, '16:00', 'financeiro', 'baixas'],
+  ['Conferência dos fechamentos de caixa', 'financeiro', 'diaria', null, null, null, '10:30', 'financeiro', 'conferencia_caixas'],
+  ['Temperatura de geladeiras e freezers', 'conveniencia', 'diaria', null, null, null, '08:30', 'conveniencia', 'temperatura'],
+  ['Pesquisa de preço dos concorrentes', 'precos', 'semanal', 1, null, null, '12:00', 'chefe_pista', 'pesquisa_preco'],
+  ['Pesquisa de preço dos concorrentes', 'precos', 'semanal', 3, null, null, '12:00', 'chefe_pista', 'pesquisa_preco'],
+  ['Pesquisa de preço dos concorrentes', 'precos', 'semanal', 5, null, null, '12:00', 'chefe_pista', 'pesquisa_preco'],
+  ['Contagem cíclica da conveniência', 'conveniencia', 'semanal', 2, null, null, null, 'conveniencia', 'contagem_ciclica'],
+  ['Aferição das bombas (20 L)', 'combustiveis', 'semanal', 1, null, null, null, 'chefe_pista', 'afericao'],
+  ['Revisão de inadimplência', 'financeiro', 'semanal', 1, null, null, null, 'financeiro', null],
+  ['Conferência das escalas da semana seguinte', 'rh', 'semanal', 4, null, null, null, 'rh', null],
+  ['Validade de produtos da conveniência', 'conveniencia', 'semanal', 1, null, null, null, 'conveniencia', null],
+  ['Fechamento do ponto e do DP', 'rh', 'mensal', null, 3, null, null, 'rh', 'fechamento_dp'],
+  ['Comissões do grid', 'rh', 'mensal', null, 3, null, null, 'rh', null],
+  ['Faltas de caixa e descontos', 'pista', 'mensal', null, 2, null, null, 'gerente', null],
+  ['Envio do pacote fiscal/contábil/RH à contabilidade', 'contabil', 'mensal', null, 5, null, null, 'financeiro', 'pacote_contabil'],
+  ['DRE gerencial', 'financeiro', 'mensal', null, 8, null, null, 'gerente', null],
+  ['Revisão de EPI e uniformes', 'rh', 'mensal', null, 10, null, null, 'rh', null],
+  ['Limpeza da caixa d\'água', 'conveniencia', 'semestral', null, 15, '1,7', null, 'conveniencia', null],
+  ['Exames periódicos ligados ao benzeno (PCMSO)', 'rh', 'semestral', null, 10, '3,9', null, 'rh', null],
+  ['Revisão das certidões negativas', 'documentos', 'semestral', null, 5, '1,7', null, 'financeiro', null],
+  ['Renovação de alvarás e licenças (revisão geral)', 'documentos', 'anual', null, 15, '1', null, 'gerente', null],
+  ['Revisão do PGR e PCMSO', 'rh', 'anual', null, 10, '3', null, 'rh', null],
+  ['Reciclagem NR-20 e brigada', 'rh', 'anual', null, 10, '4', null, 'rh', null],
+  ['Planejamento anual de férias', 'rh', 'anual', null, 5, '11', null, 'rh', null],
+  ['13º salário — 1ª parcela (até 30/11)', 'rh', 'anual', null, 25, '11', null, 'rh', null],
+  ['13º salário — 2ª parcela (até 20/12)', 'rh', 'anual', null, 15, '12', null, 'rh', null],
+  ['Verificação do Inmetro', 'combustiveis', 'anual', null, 10, '12', null, 'gerente', null],
+  ['Teste de estanqueidade (conforme licença)', 'combustiveis', 'anual', null, 5, '11', null, 'gerente', null],
+  ];
+
 function seed(db) {
   const R = rng(20261012);
   const rand = (a, b) => a + R() * (b - a);
@@ -103,13 +150,7 @@ function seed(db) {
     ]) forn[k] = ins('fornecedores', { nome, categoria: cat, cnpj: `${randi(10, 99)}.${randi(100, 999)}.${randi(100, 999)}/0001-${randi(10, 99)}`, telefone: `(84) 3${randi(200, 999)}-${randi(1000, 9999)}` });
 
     const PC = {};
-    for (const [k, cod, nome, tipo] of [
-      ['rec_comb', '3.1.01', 'Receita de combustíveis', 'receita'], ['rec_conv', '3.1.02', 'Receita da conveniência', 'receita'],
-      ['cmv_comb', '4.1.01', 'Compra de combustíveis', 'cmv'], ['cmv_conv', '4.1.02', 'Compra de mercadorias (conveniência)', 'cmv'],
-      ['folha', '5.1.01', 'Salários e encargos', 'despesa'], ['energia', '5.2.01', 'Energia elétrica', 'despesa'], ['agua', '5.2.02', 'Água e esgoto', 'despesa'],
-      ['aluguel', '5.2.03', 'Aluguel', 'despesa'], ['manut', '5.2.04', 'Manutenção de equipamentos', 'despesa'], ['impostos', '5.3.01', 'Impostos e taxas', 'despesa'],
-      ['servicos', '5.2.05', 'Serviços de terceiros', 'despesa'], ['sst', '5.2.06', 'Saúde e segurança do trabalho', 'despesa'], ['tarifas', '6.1.01', 'Tarifas bancárias', 'financeira'],
-    ]) PC[k] = ins('plano_contas', { codigo: cod, nome, tipo });
+    for (const [k, cod, nome, tipo] of PLANO_CONTAS) PC[k] = ins('plano_contas', { codigo: cod, nome, tipo });
 
     // ------------------------------------------------------------ Combustíveis, tanques e bicos
     const C = {
@@ -653,44 +694,7 @@ function seed(db) {
     }
 
     // ------------------------------------------------------------ Agenda de obrigações recorrentes (PRD seção 11)
-    const modelos = [
-      ['Abertura de turno (checklist da pista)', 'pista', 'diaria', null, null, null, '06:30', 'chefe_pista', 'abertura_turno'],
-      ['Leitura de encerrantes e medição dos tanques', 'pista', 'diaria', null, null, null, '07:00', 'chefe_pista', 'medicao_tanques'],
-      ['Fechamento de turno', 'pista', 'diaria', null, null, null, '23:00', 'chefe_pista', 'fechamento_turno'],
-      ['Fechamento de caixa por frentista', 'pista', 'diaria', null, null, null, '23:00', 'chefe_pista', 'fechamento_caixa'],
-      ['LMC do dia', 'combustiveis', 'diaria', null, null, null, '10:00', 'financeiro', 'lmc'],
-      ['Conciliação bancária', 'financeiro', 'diaria', null, null, null, '11:00', 'financeiro', 'conciliacao_bancaria'],
-      ['Conciliação de cartões', 'financeiro', 'diaria', null, null, null, '11:30', 'financeiro', 'conciliacao_cartoes'],
-      ['Baixa de pagamentos e recebimentos', 'financeiro', 'diaria', null, null, null, '16:00', 'financeiro', 'baixas'],
-      ['Conferência dos fechamentos de caixa', 'financeiro', 'diaria', null, null, null, '10:30', 'financeiro', 'conferencia_caixas'],
-      ['Temperatura de geladeiras e freezers', 'conveniencia', 'diaria', null, null, null, '08:30', 'conveniencia', 'temperatura'],
-      ['Pesquisa de preço dos concorrentes', 'precos', 'semanal', 1, null, null, '12:00', 'chefe_pista', 'pesquisa_preco'],
-      ['Pesquisa de preço dos concorrentes', 'precos', 'semanal', 3, null, null, '12:00', 'chefe_pista', 'pesquisa_preco'],
-      ['Pesquisa de preço dos concorrentes', 'precos', 'semanal', 5, null, null, '12:00', 'chefe_pista', 'pesquisa_preco'],
-      ['Contagem cíclica da conveniência', 'conveniencia', 'semanal', 2, null, null, null, 'conveniencia', 'contagem_ciclica'],
-      ['Aferição das bombas (20 L)', 'combustiveis', 'semanal', 1, null, null, null, 'chefe_pista', 'afericao'],
-      ['Revisão de inadimplência', 'financeiro', 'semanal', 1, null, null, null, 'financeiro', null],
-      ['Conferência das escalas da semana seguinte', 'rh', 'semanal', 4, null, null, null, 'rh', null],
-      ['Validade de produtos da conveniência', 'conveniencia', 'semanal', 1, null, null, null, 'conveniencia', null],
-      ['Fechamento do ponto e do DP', 'rh', 'mensal', null, 3, null, null, 'rh', 'fechamento_dp'],
-      ['Comissões do grid', 'rh', 'mensal', null, 3, null, null, 'rh', null],
-      ['Faltas de caixa e descontos', 'pista', 'mensal', null, 2, null, null, 'gerente', null],
-      ['Envio do pacote fiscal/contábil/RH à contabilidade', 'contabil', 'mensal', null, 5, null, null, 'financeiro', 'pacote_contabil'],
-      ['DRE gerencial', 'financeiro', 'mensal', null, 8, null, null, 'gerente', null],
-      ['Revisão de EPI e uniformes', 'rh', 'mensal', null, 10, null, null, 'rh', null],
-      ['Limpeza da caixa d\'água', 'conveniencia', 'semestral', null, 15, '1,7', null, 'conveniencia', null],
-      ['Exames periódicos ligados ao benzeno (PCMSO)', 'rh', 'semestral', null, 10, '3,9', null, 'rh', null],
-      ['Revisão das certidões negativas', 'documentos', 'semestral', null, 5, '1,7', null, 'financeiro', null],
-      ['Renovação de alvarás e licenças (revisão geral)', 'documentos', 'anual', null, 15, '1', null, 'gerente', null],
-      ['Revisão do PGR e PCMSO', 'rh', 'anual', null, 10, '3', null, 'rh', null],
-      ['Reciclagem NR-20 e brigada', 'rh', 'anual', null, 10, '4', null, 'rh', null],
-      ['Planejamento anual de férias', 'rh', 'anual', null, 5, '11', null, 'rh', null],
-      ['13º salário — 1ª parcela (até 30/11)', 'rh', 'anual', null, 25, '11', null, 'rh', null],
-      ['13º salário — 2ª parcela (até 20/12)', 'rh', 'anual', null, 15, '12', null, 'rh', null],
-      ['Verificação do Inmetro', 'combustiveis', 'anual', null, 10, '12', null, 'gerente', null],
-      ['Teste de estanqueidade (conforme licença)', 'combustiveis', 'anual', null, 5, '11', null, 'gerente', null],
-    ];
-    for (const [titulo, modulo, frequencia, dia_semana, dia_mes, meses, hora_limite, perfil, chave] of modelos) {
+    for (const [titulo, modulo, frequencia, dia_semana, dia_mes, meses, hora_limite, perfil, chave] of OBRIGACOES) {
       ins('tarefas_modelo', { titulo, modulo, frequencia, dia_semana, dia_mes, meses, hora_limite, perfil, chave, ativo: 1 });
     }
     db.exec('COMMIT');
@@ -717,11 +721,44 @@ function seed(db) {
   return true;
 }
 
-module.exports = { seed };
+
+// Implantação real: banco vazio com o posto, o usuário gerente e as tabelas-base
+// (plano de contas, combustíveis, categorias, agenda de obrigações). Sem dados fictícios.
+function setupInicial(db, { posto = 'Meu Posto', senha }) {
+  const now = new Date().toISOString();
+  const ins = (table, o) => {
+    const keys = Object.keys(o);
+    return Number(db.prepare(`INSERT INTO "${table}" (${keys.map((k) => `"${k}"`).join(',')}, created_at, updated_at) VALUES (${keys.map(() => '?').join(',')}, ?, ?)`)
+      .run(...keys.map((k) => o[k]), now, now).lastInsertRowid);
+  };
+  db.exec('BEGIN');
+  try {
+    ins('postos', { nome: posto });
+    ins('usuarios', { nome: 'Gerente', login: 'gerente', senha: hashPassword(senha), perfil: 'gerente', ativo: 1, trocar_senha: 1 });
+    for (const [, codigo, nome, tipo] of PLANO_CONTAS) ins('plano_contas', { codigo, nome, tipo });
+    for (const [nome, codigo_anp, unidade, tipo_teste] of [
+      ['Gasolina comum', '320102001', 'L', 'gasolina'], ['Gasolina aditivada', '320102002', 'L', 'gasolina'], ['Etanol hidratado', '810101001', 'L', 'etanol'],
+      ['Diesel S10', '820101034', 'L', 'diesel'], ['Diesel S500', '820101012', 'L', 'diesel'], ['GNV', '220101003', 'm³', 'gnv'],
+    ]) ins('combustiveis', { nome, codigo_anp, unidade, tipo_teste });
+    for (const [nome, margem_alvo] of [['Bebidas', 35], ['Snacks e doces', 40], ['Tabacaria', 12], ['Sorvetes', 45], ['Mercearia', 30], ['Lubrificantes e aditivos', 30], ['Acessórios automotivos', 45]]) {
+      ins('categorias_conv', { nome, margem_alvo });
+    }
+    for (const [titulo, modulo, frequencia, dia_semana, dia_mes, meses, hora_limite, perfil, chave] of OBRIGACOES) {
+      ins('tarefas_modelo', { titulo, modulo, frequencia, dia_semana, dia_mes, meses, hora_limite, perfil, chave, ativo: 1 });
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+  require('./services/core').gerarTarefas(db);
+}
+
+module.exports = { seed, setupInicial };
 
 if (require.main === module) {
   const { open } = require('./db');
-  const dataDir = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
+  const dataDir = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data-demo'));
   const file = path.join(dataDir, 'posto.db');
   if (process.argv.includes('--reset')) {
     for (const f of [file, file + '-wal', file + '-shm']) if (fs.existsSync(f)) fs.unlinkSync(f);

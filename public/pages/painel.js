@@ -22,6 +22,10 @@ export async function painel(view) {
       </div>
     </div>
 
+    ${d.implantacao ? html`<section class="card mb"><div class="card-head"><h3>Primeiros passos — ${d.implantacao.filter((x) => x.ok).length} de ${d.implantacao.length}</h3><small class="muted">Este quadro some quando tudo estiver cadastrado</small></div>
+      ${progress(100 * d.implantacao.filter((x) => x.ok).length / d.implantacao.length, 'green')}
+      <div class="check-list mt" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">${d.implantacao.map((x) => html`<a class="alert-item ${x.ok ? 'verde' : 'amarelo'}" href="${x.link}"><div><div class="t">${x.ok ? '✔ ' : ''}${x.titulo}</div></div></a>`)}</div></section>` : ''}
+
     <div class="kpis">
       ${kpi('Faturamento hoje', fmt.brl(v.dia.faturamento), html`Pista ${fmt.brl(v.dia.faturamento_pista)} · Conv. ${fmt.brl(v.dia.faturamento_conveniencia)}`, { href: '#/financeiro' })}
       ${kpi('Litros hoje', fmt.num(v.dia.litros), `Ontem: ${fmt.num(v.ontem.litros)} L`, { href: '#/financeiro' })}

@@ -96,7 +96,24 @@ function painel(ctx) {
     FROM vendas WHERE data BETWEEN ? AND ? ${pf} GROUP BY data ORDER BY data`).all(addDays(hoje, -29), hoje, ...pp)
     .map((r) => ({ data: r.data, pista: round2(r.pista), conveniencia: round2(r.conveniencia) }));
 
+  // Primeiros passos da implantação (some quando tudo estiver cadastrado)
+  const conta = (sql) => ctx.db.prepare(sql).get().n;
+  const passos = [
+    { titulo: 'Criar sua senha pessoal', ok: true, link: '#/painel' },
+    { titulo: 'Conferir os dados do posto (CNPJ, endereço)', ok: !!conta("SELECT COUNT(*) AS n FROM postos WHERE cnpj IS NOT NULL AND cnpj <> ''"), link: '#/r/postos' },
+    { titulo: 'Informar preço de bomba de cada combustível', ok: !conta('SELECT COUNT(*) AS n FROM combustiveis WHERE preco_bomba IS NULL'), link: '#/r/combustiveis' },
+    { titulo: 'Cadastrar os tanques', ok: !!conta('SELECT COUNT(*) AS n FROM tanques'), link: '#/r/tanques' },
+    { titulo: 'Cadastrar os bicos com o encerrante atual', ok: !!conta('SELECT COUNT(*) AS n FROM bicos'), link: '#/r/bicos' },
+    { titulo: 'Cadastrar os funcionários', ok: !!conta('SELECT COUNT(*) AS n FROM funcionarios'), link: '#/r/funcionarios' },
+    { titulo: 'Montar a escala das próximas semanas', ok: !!conta('SELECT COUNT(*) AS n FROM escalas'), link: '#/rh/escalas' },
+    { titulo: 'Criar o acesso de cada pessoa (chefe, RH, financeiro…)', ok: conta('SELECT COUNT(*) AS n FROM usuarios') > 1, link: '#/r/usuarios' },
+    { titulo: 'Lançar documentos, licenças e alvarás com a validade', ok: !!conta('SELECT COUNT(*) AS n FROM documentos'), link: '#/documentos' },
+    { titulo: 'Cadastrar as contas bancárias', ok: !!conta('SELECT COUNT(*) AS n FROM contas_bancarias'), link: '#/r/contas_bancarias' },
+    { titulo: 'Cadastrar os concorrentes para a pesquisa de preço', ok: !!conta('SELECT COUNT(*) AS n FROM concorrentes'), link: '#/r/concorrentes' },
+  ];
+
   return {
+    implantacao: passos.every((p) => p.ok) ? null : passos,
     data: hoje,
     vendas: {
       dia, ontem, mes, mes_anterior_mesmo_periodo: mesAnt,

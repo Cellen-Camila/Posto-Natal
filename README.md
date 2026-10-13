@@ -7,12 +7,16 @@ Sistema web (navegador e celular) que reúne **pista, RH/DP, financeiro, conveni
 Requisito: **Node.js 22.5 ou mais recente**. O sistema não tem dependências externas: usa o SQLite nativo do Node e não exige `npm install`.
 
 ```bash
-npm start            # http://localhost:3000  (PORT, DATA_DIR e TZ configuráveis)
-npm run seed         # recria o banco com ~75 dias de dados de demonstração
-npm test             # testes automatizados (regras de negócio + API)
+npm start            # uso real: começa vazio, só com o posto e o usuário gerente
+npm run demo         # demonstração com ~75 dias de dados fictícios (pasta separada data-demo)
+npm test             # testes automatizados
 ```
 
-Na primeira execução o banco (`data/posto.db`) é criado e preenchido com dados de demonstração. Todos os usuários de exemplo usam a senha `posto123`:
+No Windows, basta dar dois cliques em `iniciar-posto.bat` (uso real) ou `iniciar-demonstracao.bat`. **O passo a passo completo está em [GUIA-DE-IMPLANTACAO.md](GUIA-DE-IMPLANTACAO.md)**: onde instalar, primeiros cadastros e treinamento da equipe.
+
+**Uso real:** no primeiro `npm start` a janela mostra a senha provisória do usuário `gerente`, que também fica salva em `data/ACESSO-INICIAL.txt`. No primeiro acesso o sistema obriga a criar uma senha pessoal. Variáveis opcionais: `POSTO_NOME`, `SENHA_GERENTE`, `PORT` e `DATA_DIR`. Para servidor/nuvem há um `Dockerfile`; os dados ficam no volume `/app/data`.
+
+**Demonstração:** todos os usuários de exemplo usam a senha `posto123`.
 
 | Usuário | Perfil | O que vê |
 |---|---|---|

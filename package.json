@@ -4,9 +4,12 @@
   "description": "Plataforma de Gestão Integrada do Posto de Combustível",
   "private": true,
   "type": "commonjs",
-  "engines": { "node": ">=22.5" },
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "start": "node --no-warnings server/index.js",
+    "demo": "node --no-warnings server/index.js --demo",
     "seed": "node --no-warnings server/seed.js --reset",
     "test": "node --no-warnings --test test/*.test.js"
   }

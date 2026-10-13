@@ -258,3 +258,38 @@ test('upload e download de arquivo anexado', async () => {
   assert.equal(r.status, 200);
   assert.equal(await r.text(), '%PDF-1.4 teste');
 });
+
+test('implantação real: banco vazio, troca de senha obrigatória e bloqueio por tentativas', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { open } = require('../server/db');
+  const { createApp } = require('../server/app');
+  const { setupInicial } = require('../server/seed');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'posto-real-'));
+  const db = open(path.join(dir, 'posto.db'));
+  setupInicial(db, { posto: 'Posto Teste', senha: 'provisoria1' });
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM funcionarios').get().n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vendas').get().n, 0);
+  assert.ok(db.prepare('SELECT COUNT(*) AS n FROM tarefas_modelo').get().n > 20);
+  const server = createApp({ db, dataDir: dir }).server();
+  await new Promise((r) => server.listen(0, r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const call = (m, u, body, tok) => fetch(base + u, { method: m, headers: { 'content-type': 'application/json', ...(tok ? { authorization: `Bearer ${tok}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  try {
+    const info = await (await call('GET', '/api/info')).json();
+    assert.deepEqual(info, { demo: false, posto: 'Posto Teste' });
+    const { token, user } = await (await call('POST', '/api/login', { login: 'gerente', senha: 'provisoria1' })).json();
+    assert.equal(user.trocar_senha, 1);
+    assert.equal((await call('GET', '/api/painel', null, token)).status, 403);
+    assert.equal((await call('POST', '/api/me/senha', { atual: 'provisoria1', nova: 'curta' }, token)).status, 400);
+    assert.equal((await call('POST', '/api/me/senha', { atual: 'provisoria1', nova: 'MinhaSenha2026' }, token)).status, 200);
+    assert.equal((await call('GET', '/api/painel', null, token)).status, 200);
+    for (let i = 0; i < 5; i++) assert.equal((await call('POST', '/api/login', { login: 'gerente', senha: 'errada' })).status, 401);
+    assert.equal((await call('POST', '/api/login', { login: 'gerente', senha: 'MinhaSenha2026' })).status, 429);
+  } finally {
+    await new Promise((r) => server.close(r));
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

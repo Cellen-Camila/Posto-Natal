@@ -19,9 +19,25 @@ function verifyPassword(senha, stored) {
   return ref.length === test.length && crypto.timingSafeEqual(ref, test);
 }
 
+// Bloqueio temporário após várias senhas erradas seguidas para o mesmo usuário
+const MAX_TENTATIVAS = 5;
+const BLOQUEIO_MIN = 15;
+const tentativas = new Map(); // login -> { n, ate }
+
 function login(db, loginName, senha) {
-  const u = db.prepare('SELECT * FROM usuarios WHERE lower(login) = lower(?) AND ativo = 1').get(String(loginName || ''));
-  if (!u || !verifyPassword(senha, u.senha)) throw new HttpError(401, 'Usuário ou senha inválidos');
+  const chave = String(loginName || '').toLowerCase();
+  const t = tentativas.get(chave);
+  if (t && t.ate && t.ate > Date.now()) {
+    throw new HttpError(429, `Muitas tentativas com senha errada. Tente de novo em ${Math.ceil((t.ate - Date.now()) / 60000)} minuto(s).`);
+  }
+  const u = db.prepare('SELECT * FROM usuarios WHERE lower(login) = lower(?) AND ativo = 1').get(chave);
+  if (!u || !verifyPassword(senha, u.senha)) {
+    const n = (t && !t.ate ? t.n : 0) + 1;
+    tentativas.set(chave, { n, ate: n >= MAX_TENTATIVAS ? Date.now() + BLOQUEIO_MIN * 60000 : null });
+    if (u) db.prepare('INSERT INTO auditoria (at, usuario_id, acao, tabela, registro_id) VALUES (?, ?, ?, ?, ?)').run(new Date().toISOString(), u.id, 'senha_errada', 'usuarios', u.id);
+    throw new HttpError(401, 'Usuário ou senha inválidos');
+  }
+  tentativas.delete(chave);
   const token = crypto.randomBytes(24).toString('hex');
   const expira = new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString();
   db.prepare('INSERT INTO sessoes (token, usuario_id, expira) VALUES (?, ?, ?)').run(token, u.id, expira);
