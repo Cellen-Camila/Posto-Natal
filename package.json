@@ -1,0 +1,13 @@
+{
+  "name": "posto-natal",
+  "version": "1.0.0",
+  "description": "Plataforma de Gestão Integrada do Posto de Combustível",
+  "private": true,
+  "type": "commonjs",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --no-warnings server/index.js",
+    "seed": "node --no-warnings server/seed.js --reset",
+    "test": "node --no-warnings --test test/*.test.js"
+  }
+}
