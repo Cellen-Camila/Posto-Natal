@@ -64,6 +64,7 @@ def({
   name: 'funcionarios', label: 'Funcionários', module: 'rh', display: 'nome', order: 'nome',
   read: [P, G, 'rh', 'chefe_pista', 'financeiro'], write: [G, 'rh'],
   fields: [
+    { name: 'codigo', label: 'Código (folha)', type: 'text', list: true },
     { name: 'nome', label: 'Nome', type: 'text', required: true, list: true },
     { name: 'cpf', label: 'CPF', type: 'text', list: true },
     { name: 'pis', label: 'PIS', type: 'text' },
@@ -86,6 +87,8 @@ def({
     { name: 'banco_conta', label: 'Conta para pagamento', type: 'text' },
     { name: 'endereco', label: 'Endereço', type: 'text' },
     { name: 'consentimento_lgpd', label: 'Consentimento LGPD assinado', type: 'bool' },
+    { name: 'ferias_aberto', label: 'Períodos de férias em aberto (importados da contabilidade)', type: 'json', hidden: true },
+    { name: 'ferias_corte', label: 'Data-base da programação de férias importada', type: 'date', hidden: true },
     { name: 'docs', label: 'Documentos (contrato, ficha de registro, termos)', type: 'files' },
     { name: 'ativo', label: 'Ativo', type: 'bool', default: 1, list: true },
   ],

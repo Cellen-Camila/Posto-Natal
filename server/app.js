@@ -148,6 +148,7 @@ function createApp({ db, dataDir, demo = false }) {
   route('POST', '/api/rh/afd', ({ ctx, body }) => rh.importarAfd(ctx, body.texto));
   route('POST', '/api/rh/ponto/bater', ({ ctx, body }) => rh.baterPonto(ctx, body));
   route('GET', '/api/rh/ferias', ({ ctx, query }) => { rhGuard(ctx); return { situacao: rh.situacaoFerias(ctx), conflitos: rh.conflitosFerias(ctx, query.ano || today().slice(0, 4)) }; });
+  route('POST', '/api/rh/ferias/importar', ({ ctx, body }) => rh.importarProgramacaoFerias(ctx, body.texto));
   route('GET', '/api/rh/decimo', ({ ctx, query }) => { rhGuard(ctx); return rh.decimoTerceiro(ctx, Number(query.ano) || Number(today().slice(0, 4))); });
   route('GET', '/api/rh/comissoes', ({ ctx, query }) => { auth.requireRead(ctx.user, 'vendas_grid'); return rh.comissoes(ctx, query.competencia || competencia(today())); });
   route('GET', '/api/rh/epi', ({ ctx }) => { rhGuard(ctx); return rh.fichasEpi(ctx); });

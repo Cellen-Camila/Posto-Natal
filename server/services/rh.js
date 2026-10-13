@@ -213,36 +213,119 @@ function atestadosInss(ctx) {
 }
 
 // ------------------------------------------------------------------ Férias
+// Avos de férias de um período em aquisição (mês com 15 dias ou mais conta)
+function avosAte(ini, ref) {
+  let avos = 0;
+  let d = ini;
+  while (avos < 12) {
+    const prox = addMonths(d, 1);
+    if (prox <= addDays(ref, 1)) { avos++; d = prox; continue; }
+    if (diffDays(d, ref) + 1 >= 15) avos++;
+    break;
+  }
+  return avos;
+}
+
+// Períodos aquisitivos de um funcionário. Se a programação da contabilidade foi importada,
+// valem exatamente os períodos listados nela; os que começarem depois da data-base são
+// gerados automaticamente em sequência. Sem importação, os períodos partem da admissão.
+function periodosAquisitivos(f, ref) {
+  let lista = [];
+  let aberto = f.ferias_aberto;
+  if (typeof aberto === 'string') { try { aberto = JSON.parse(aberto); } catch { aberto = null; } }
+  if (Array.isArray(aberto) && aberto.length) {
+    lista = aberto.map((p) => ({ inicio: p.inicio, fim: p.fim || addDays(addYears(p.inicio, 1), -1), saldo: p.saldo ?? 30, importado: true }))
+      .sort((x, y) => x.inicio.localeCompare(y.inicio));
+    const corte = f.ferias_corte || ref;
+    for (let ini = addDays(lista[lista.length - 1].fim, 1); ini <= ref; ini = addYears(ini, 1)) {
+      if (ini > corte) lista.push({ inicio: ini, fim: addDays(addYears(ini, 1), -1), saldo: 30 });
+    }
+  } else if (f.admissao) {
+    for (let ini = f.admissao; ini <= ref; ini = addYears(ini, 1)) lista.push({ inicio: ini, fim: addDays(addYears(ini, 1), -1), saldo: 30 });
+  }
+  return lista;
+}
+
 function situacaoFerias(ctx, ref = today()) {
-  const funcs = ctx.db.prepare(`SELECT * FROM funcionarios WHERE ativo = 1 AND admissao IS NOT NULL ${ctx.postoId ? 'AND posto_id = ?' : ''} ORDER BY nome`)
+  const funcs = ctx.db.prepare(`SELECT * FROM funcionarios WHERE ativo = 1 AND (admissao IS NOT NULL OR ferias_aberto IS NOT NULL) ${ctx.postoId ? 'AND posto_id = ?' : ''} ORDER BY nome`)
     .all(...(ctx.postoId ? [ctx.postoId] : []));
   const out = [];
   for (const f of funcs) {
     const ferias = ctx.db.prepare("SELECT * FROM ferias WHERE funcionario_id = ? AND status <> 'cancelada'").all(f.id);
-    for (let ini = f.admissao; addYears(ini, 1) <= addDays(ref, 365 * 2); ini = addYears(ini, 1)) {
-      const fimAquisitivo = addDays(addYears(ini, 1), -1);
-      if (fimAquisitivo > addYears(ref, 1)) break;
-      const limite = addDays(addYears(ini, 2), -1);
-      const marcada = ferias.find((x) => x.aquisitivo_inicio === ini);
-      if (marcada && marcada.status === 'gozada') continue;
-      const completo = fimAquisitivo < ref;
-      const diasLimite = diffDays(ref, limite);
+    for (const p of periodosAquisitivos(f, ref)) {
+      const doPeriodo = ferias.filter((x) => x.aquisitivo_inicio === p.inicio);
+      const usados = sum(doPeriodo.filter((x) => x.status === 'gozada'), (x) => num(x.dias) + num(x.abono_pecuniario));
+      const programados = sum(doPeriodo.filter((x) => x.status === 'programada'), (x) => num(x.dias) + num(x.abono_pecuniario));
+      const restantes = p.saldo - usados;
+      if (restantes <= 0) continue;
+      const limite = addDays(addYears(p.fim, 1), 0); // fim do período concessivo
+      const limiteInicio = addDays(limite, -(restantes - 1)); // último dia para começar o gozo sem pagar em dobro
+      const completo = p.fim < ref;
+      const diasLimite = diffDays(ref, limiteInicio);
+      const marcada = doPeriodo.find((x) => x.status === 'programada');
       let situacao;
-      if (marcada) situacao = 'programada';
+      if (marcada && programados >= restantes) situacao = 'programada';
       else if (!completo) situacao = 'em_aquisicao';
       else if (diasLimite < 0) situacao = 'vencida_dobro';
       else if (diasLimite <= 30) situacao = 'vence_30';
       else if (diasLimite <= 60) situacao = 'vence_60';
       else situacao = 'a_programar';
-      if (situacao === 'em_aquisicao' && diffDays(ref, fimAquisitivo) > 90) continue;
+      const avos = completo ? 12 : avosAte(p.inicio, ref);
       out.push({
-        funcionario_id: f.id, nome: f.nome, funcao: f.funcao, aquisitivo_inicio: ini, aquisitivo_fim: fimAquisitivo,
-        limite_concessivo: limite, dias_para_limite: diasLimite, situacao,
+        funcionario_id: f.id, codigo: f.codigo, nome: f.nome, funcao: f.funcao, aquisitivo_inicio: p.inicio, aquisitivo_fim: p.fim,
+        limite_concessivo: limite, limite_gozo: limiteInicio, dias_para_limite: diasLimite, situacao,
+        dias_restantes: restantes, dias_usados: usados, avos, dias_direito: completo ? restantes : Math.round(avos * 2.5 * 10) / 10,
         programada_inicio: marcada?.inicio || null, programada_dias: marcada?.dias || null,
+        importado: !!p.importado, data_base: p.importado ? f.ferias_corte : null,
       });
     }
   }
   return out;
+}
+
+// Importa a programação de férias da contabilidade (CSV: codigo;nome;admissao;aquisitivo_inicio;aquisitivo_fim;dias_restantes;data_base).
+// Para cada funcionário da lista, os períodos listados passam a ser os únicos em aberto.
+function importarProgramacaoFerias(ctx, texto) {
+  auth.requireWrite(ctx.user, 'funcionarios');
+  const linhas = String(texto).replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim());
+  if (linhas.length < 2) throw new HttpError(400, 'Arquivo vazio');
+  const sep = linhas[0].includes(';') ? ';' : ',';
+  const head = linhas[0].split(sep).map((h) => h.trim().toLowerCase());
+  const col = (c, n) => (head.indexOf(n) >= 0 ? (c[head.indexOf(n)] || '').trim() : '');
+  const data = (s) => (/^\d{2}\/\d{2}\/\d{4}$/.test(s) ? s.split('/').reverse().join('-') : s);
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const grupos = new Map();
+  for (let i = 1; i < linhas.length; i++) {
+    const c = linhas[i].split(sep);
+    const nome = col(c, 'nome');
+    const inicio = data(col(c, 'aquisitivo_inicio'));
+    if (!nome || !/^\d{4}-\d{2}-\d{2}$/.test(inicio)) throw new HttpError(400, `Linha ${i + 1}: nome ou início do período inválido`);
+    const k = col(c, 'codigo') || norm(nome);
+    if (!grupos.has(k)) grupos.set(k, { codigo: col(c, 'codigo'), nome, admissao: data(col(c, 'admissao')), data_base: data(col(c, 'data_base')), periodos: [] });
+    const restantes = Number(String(col(c, 'dias_restantes') || '30').replace(',', '.'));
+    grupos.get(k).periodos.push({ inicio, fim: data(col(c, 'aquisitivo_fim')) || addDays(addYears(inicio, 1), -1), saldo: Number.isFinite(restantes) ? restantes : 30 });
+  }
+  const todos = ctx.db.prepare(`SELECT * FROM funcionarios ${ctx.postoId ? 'WHERE posto_id = ?' : ''}`).all(...(ctx.postoId ? [ctx.postoId] : []));
+  const resultado = { criados: [], atualizados: [], periodos: 0, fora_da_lista: [] };
+  const vistos = new Set();
+  for (const g of grupos.values()) {
+    let f = (g.codigo && todos.find((x) => String(x.codigo || '') === g.codigo)) || todos.find((x) => norm(x.nome) === norm(g.nome));
+    const campos = { ferias_aberto: g.periodos, ferias_corte: g.data_base || today() };
+    if (f) {
+      if (!f.codigo && g.codigo) campos.codigo = g.codigo;
+      if (!f.admissao && g.admissao) campos.admissao = g.admissao;
+      crud.update(ctx, 'funcionarios', f.id, campos, { internal: true });
+      resultado.atualizados.push(f.nome);
+    } else {
+      f = crud.create(ctx, 'funcionarios', { nome: g.nome, codigo: g.codigo || null, admissao: g.admissao || g.periodos[0].inicio, ativo: 1, ...campos }, { internal: true });
+      resultado.criados.push(g.nome);
+    }
+    vistos.add(f.id);
+    resultado.periodos += g.periodos.length;
+  }
+  resultado.fora_da_lista = todos.filter((x) => x.ativo && !vistos.has(x.id)).map((x) => x.nome);
+  crud.audit(ctx.db, ctx.user, 'importar_programacao_ferias', 'funcionarios', null, null, { funcionarios: grupos.size, periodos: resultado.periodos });
+  return resultado;
 }
 
 // Turnos descobertos: dias em que férias programadas deixam a equipe abaixo do mínimo
@@ -513,6 +596,6 @@ function fechamentoDp(ctx, comp) {
 
 module.exports = {
   calcularDia, minutosNoturnos, espelho, bancoHoras, resumoEquipe, parseAfd, importarAfd, baterPonto,
-  atestadosInss, situacaoFerias, conflitosFerias, decimoTerceiro, comissoes, fichasEpi, linhaDoTempo,
+  atestadosInss, situacaoFerias, periodosAquisitivos, importarProgramacaoFerias, conflitosFerias, decimoTerceiro, comissoes, fichasEpi, linhaDoTempo,
   conflitosEscala, fechamentoDp, ITENS_DP, minToHm, parseDate,
 };

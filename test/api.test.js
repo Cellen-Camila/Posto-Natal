@@ -293,3 +293,22 @@ test('implantação real: banco vazio, troca de senha obrigatória e bloqueio po
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('importação da programação de férias da contabilidade', async () => {
+  const csv = '﻿codigo;nome;admissao;aquisitivo_inicio;aquisitivo_fim;dias_restantes;data_base\r\n'
+    + '54;Anne Karine Teste;01/03/2021;01/03/2025;28/02/2026;15;17/07/2026\r\n'
+    + '54;Anne Karine Teste;01/03/2021;01/03/2026;28/02/2027;30;17/07/2026\r\n'
+    + '8;Joao Batista Silva;01/10/2020;01/10/2022;30/09/2023;30;17/07/2026\r\n';
+  const r = await S.req('POST', '/api/rh/ferias/importar', { as: 'rh', body: { texto: csv } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.deepEqual(r.data.criados, ['Anne Karine Teste']);
+  assert.deepEqual(r.data.atualizados, ['João Batista Silva']); // casa sem acento
+  const { situacao } = (await S.req('GET', '/api/rh/ferias', { as: 'rh' })).data;
+  const anne = situacao.filter((x) => x.nome === 'Anne Karine Teste');
+  assert.equal(anne[0].limite_gozo, '2027-02-14');
+  assert.equal(anne[0].dias_restantes, 15);
+  const joao = situacao.filter((x) => x.nome === 'João Batista Silva');
+  assert.equal(joao[0].aquisitivo_inicio, '2022-10-01');
+  assert.equal(joao[0].situacao, 'vencida_dobro');
+  assert.equal((await S.req('POST', '/api/rh/ferias/importar', { as: 'joao', body: { texto: csv } })).status, 403);
+});

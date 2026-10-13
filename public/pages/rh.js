@@ -118,18 +118,26 @@ export async function ferias(view, _p, query) {
   const [f, dec] = await Promise.all([get(`/api/rh/ferias?ano=${ano}`), get(`/api/rh/decimo?ano=${ano}`)]);
   const SIT = { vencida_dobro: ['Vencida — pagamento em dobro', 'red'], vence_30: ['Vence em até 30 dias', 'red'], vence_60: ['Vence em até 60 dias', 'yellow'], a_programar: ['A programar', ''], programada: ['Programada', 'blue'], em_aquisicao: ['Em aquisição', ''] };
   const ord = ['vencida_dobro', 'vence_30', 'vence_60', 'a_programar', 'programada', 'em_aquisicao'];
+  const colunas = [
+    { label: 'Funcionário', get: (x) => html`${x.codigo ? html`<small class="muted">${x.codigo} · </small>` : ''}${x.nome}` },
+    { label: 'Período aquisitivo', get: (x) => html`<span class="nowrap">${fmt.date(x.aquisitivo_inicio)} a ${fmt.date(x.aquisitivo_fim)}</span>` },
+    { label: 'Dias de direito', num: true, get: (x) => (x.situacao === 'em_aquisicao' ? html`${fmt.num(x.dias_direito, 1)} <small class="muted">(${x.avos}/12)</small>` : html`${x.dias_restantes}${x.dias_usados ? html` <small class="muted">de ${x.dias_restantes + x.dias_usados}</small>` : ''}`) },
+    { label: 'Começar o gozo até', get: (x) => html`<span class="nowrap">${fmt.date(x.limite_gozo)}</span>` },
+    { label: 'Situação', get: (x) => html`${badge(SIT[x.situacao][0], SIT[x.situacao][1])}${x.programada_inicio ? html` <small>início ${fmt.date(x.programada_inicio)}</small>` : ''}` },
+  ];
+  const ordena = (arr) => [...arr].sort((a, b) => ord.indexOf(a.situacao) - ord.indexOf(b.situacao) || a.dias_para_limite - b.dias_para_limite || a.nome.localeCompare(b.nome));
+  const temImport = f.situacao.some((x) => x.importado);
+  const principais = temImport ? f.situacao.filter((x) => x.importado) : f.situacao;
+  const novos = temImport ? f.situacao.filter((x) => !x.importado) : [];
+  const dataBase = principais.find((x) => x.data_base)?.data_base;
   mount(view, html`
-    <div class="page-head"><div><h1>Férias e 13º salário</h1><div class="sub">Alertas com 60 e 30 dias do fim do período concessivo (risco de pagamento em dobro)</div></div>
-      <div class="row"><a class="btn" href="#/r/ferias">Lançar / programar férias</a></div></div>
-    <div class="grid g2">
-      ${card('Situação dos períodos de férias', table([
-        { label: 'Funcionário', get: (x) => x.nome },
-        { label: 'Período aquisitivo', get: (x) => `${fmt.date(x.aquisitivo_inicio)} – ${fmt.date(x.aquisitivo_fim)}` },
-        { label: 'Limite para gozo', get: (x) => fmt.date(x.limite_concessivo) },
-        { label: 'Situação', get: (x) => html`${badge(SIT[x.situacao][0], SIT[x.situacao][1])}${x.programada_inicio ? html` <small>início ${fmt.date(x.programada_inicio)}</small>` : ''}` },
-      ], [...f.situacao].sort((a, b) => ord.indexOf(a.situacao) - ord.indexOf(b.situacao) || a.dias_para_limite - b.dias_para_limite)))}
-      ${card(`Planejamento ${ano}: conflitos (mesma função de férias ao mesmo tempo)`, f.conflitos.length ? html`<div class="alert-list">${f.conflitos.map((c) => html`<div class="alert-item amarelo"><div><div class="t">${c.funcao}: ${c.funcionarios.join(' e ')}</div><div class="d">${fmt.date(c.de)} a ${fmt.date(c.ate)} — turno pode ficar descoberto</div></div></div>`)}</div>` : html`<div class="empty">Nenhum conflito nas férias programadas ✔</div>`)}
-    </div>
+    <div class="page-head"><div><h1>Férias e 13º salário</h1><div class="sub">Alertas com 60 e 30 dias antes do prazo para começar o gozo (risco de pagamento em dobro)</div></div>
+      <div class="row">${canWrite('funcionarios') ? html`<label class="btn">⬆ Importar programação da contabilidade (CSV)<input type="file" id="imp-ferias" accept=".csv,.txt" hidden></label>` : ''}
+        <a class="btn btn-primary" href="#/r/ferias">Lançar / programar férias</a></div></div>
+    <div id="imp-res"></div>
+    ${card(temImport ? `Períodos em aberto — programação da contabilidade de ${fmt.date(dataBase)} (${principais.length})` : `Períodos em aberto (${principais.length})`, table(colunas, ordena(principais)))}
+    ${novos.length ? html`<details class="card mt"><summary style="cursor:pointer;font-weight:600">Períodos iniciados depois de ${fmt.date(dataBase)} (${novos.length}) — ainda em aquisição, entram na próxima programação</summary><div class="mt">${table(colunas, ordena(novos))}</div></details>` : ''}
+    <div class="mt">${card(`Planejamento ${ano}: conflitos (mesma função de férias ao mesmo tempo)`, f.conflitos.length ? html`<div class="alert-list">${f.conflitos.map((c) => html`<div class="alert-item amarelo"><div><div class="t">${c.funcao}: ${c.funcionarios.join(' e ')}</div><div class="d">${fmt.date(c.de)} a ${fmt.date(c.ate)} — turno pode ficar descoberto</div></div></div>`)}</div>` : html`<div class="empty">Nenhum conflito nas férias programadas ✔</div>`)}</div>
     <div class="mt">${card(`13º salário ${ano} — 1ª parcela até ${fmt.date(dec.prazo_1)} · 2ª parcela até ${fmt.date(dec.prazo_2)}`, table([
       { label: 'Funcionário', get: (l) => l.nome },
       { label: 'Remuneração (c/ periculosidade)', num: true, get: (l) => fmt.brl(l.remuneracao) },
@@ -140,6 +148,27 @@ export async function ferias(view, _p, query) {
       { label: 'Total', num: true, get: (l) => fmt.brl(l.total) },
     ], dec.linhas, { foot: ['Total', '', '', fmt.brl(dec.provisao_mensal), fmt.brl(dec.linhas.reduce((a, l) => a + l.parcela1, 0)), fmt.brl(dec.linhas.reduce((a, l) => a + l.parcela2, 0)), fmt.brl(dec.total)] }))}
     <p class="muted"><small>Valores estimados sem médias de variáveis (HE, comissões) e sem descontos de INSS/IRRF — conferir com a contabilidade.</small></p></div>`);
+  bindImportFerias(view);
+}
+
+function bindImportFerias(view) {
+  $('#imp-ferias', view)?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const r = await post('/api/rh/ferias/importar', { texto: await file.text() });
+      toast(`Programação importada: ${r.periodos} período(s) de ${r.criados.length + r.atualizados.length} funcionário(s)`, 'ok');
+      sessionStorage.setItem('imp-ferias', JSON.stringify(r));
+      reload();
+    } catch (err) { handleErr(err); }
+  });
+  let r = null;
+  try { r = JSON.parse(sessionStorage.getItem('imp-ferias') || 'null'); sessionStorage.removeItem('imp-ferias'); } catch { /* sem storage */ }
+  if (r) {
+    mount($('#imp-res', view), card('Resultado da importação', html`<p>${r.periodos} período(s) em aberto gravados. ${r.criados.length} funcionário(s) cadastrados agora, ${r.atualizados.length} atualizados.</p>
+      ${r.criados.length ? html`<p class="muted">Cadastrados agora (complete CPF, função e salário em RH → Funcionários): ${r.criados.join(', ')}</p>` : ''}
+      ${r.fora_da_lista.length ? html`<p class="down">Ativos no sistema mas fora da programação (confira se foram desligados): ${r.fora_da_lista.join(', ')}</p>` : ''}`));
+  }
 }
 
 export async function epi(view) {

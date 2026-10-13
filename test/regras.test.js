@@ -78,3 +78,15 @@ test('zip: estrutura válida', () => {
   assert.equal(b.readUInt32LE(0), 0x04034b50);
   assert.equal(b.readUInt32LE(b.length - 22), 0x06054b50);
 });
+
+test('férias: programação importada define exatamente os períodos em aberto', () => {
+  const rhs = require('../server/services/rh');
+  const f = { ferias_corte: '2026-07-17', ferias_aberto: [
+    { inicio: '2025-02-14', fim: '2026-02-13', saldo: 30 }, { inicio: '2026-02-14', fim: '2027-02-13', saldo: 30 },
+  ] };
+  assert.deepEqual(rhs.periodosAquisitivos(f, '2026-07-17').map((p) => p.inicio), ['2025-02-14', '2026-02-14']);
+  // período vencido isolado: os seguintes que começaram antes da data-base não reabrem
+  const j = { ferias_corte: '2026-07-17', ferias_aberto: [{ inicio: '2022-10-01', fim: '2023-09-30', saldo: 30 }] };
+  assert.deepEqual(rhs.periodosAquisitivos(j, '2026-07-17').map((p) => p.inicio), ['2022-10-01']);
+  assert.deepEqual(rhs.periodosAquisitivos(j, '2026-10-13').map((p) => p.inicio), ['2022-10-01', '2026-10-01']);
+});
