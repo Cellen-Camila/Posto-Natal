@@ -292,6 +292,7 @@ async function route() {
   const view = $('#view');
   if (!view) return;
   $('#sidebar')?.classList.remove('open');
+  document.querySelectorAll('.modal-bg').forEach((m) => m.remove());
   highlightNav('#' + path);
   const r = ROUTES.find(([re]) => re.test(path));
   if (!r) { mount(view, html`<div class="empty">Página não encontrada.</div>`); return; }

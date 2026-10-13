@@ -270,6 +270,8 @@ a.alert-item:hover { text-decoration: none; filter: brightness(.98); }
   .modal-bg { padding: 0; }
   .modal { border-radius: 0; min-height: 100vh; }
   .hide-sm { display: none; }
+  .tbl input[type=number] { width: 92px !important; }
+  .tbl td, .tbl th { padding: 6px 5px; }
 }
 @media print {
   .sidebar, .topbar, .toolbar, .btn, .offline-bar, #toasts, .no-print { display: none !important; }
